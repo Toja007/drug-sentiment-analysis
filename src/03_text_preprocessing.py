@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[6]:
+# In[1]:
 
 
 #import necessary libraries for text preprocessing
@@ -14,7 +14,7 @@ from nltk.tokenize import word_tokenize
 from nltk.stem import WordNetLemmatizer
 
 
-# In[15]:
+# In[2]:
 
 
 nltk.download('punkt')
@@ -23,7 +23,7 @@ nltk.download('wordnet')
 nltk.download('punkt_tab')
 
 
-# In[8]:
+# In[3]:
 
 
 #loading the datasets
@@ -33,7 +33,7 @@ training_data = pd.read_csv(training_path)
 test_data = pd.read_csv(test_path)
 
 
-# In[9]:
+# In[4]:
 
 
 #mapping the wrongly splelled drug names
@@ -47,13 +47,13 @@ drug_corrections = {
 
     "giotrif": "gilotrif",
 
-    "crizontnib": "crizotinib",
+    "crizotnib": "crizotinib",
 
     "almita": "alimta"
 }
 
 
-# In[10]:
+# In[5]:
 
 
 #text preprocessing fuction
@@ -83,7 +83,7 @@ def preprocess_text(text):
     return text
 
 
-# In[11]:
+# In[6]:
 
 
 #function to correct drug names in the text
@@ -93,7 +93,7 @@ def correct_drugs(text):
     return text
 
 
-# In[12]:
+# In[7]:
 
 
 #function to correct drug names in drug column
@@ -103,7 +103,7 @@ def correct_drug_col(drug):
     return drug
 
 
-# In[ ]:
+# In[8]:
 
 
 #apply preprocessing on training and test datasets
@@ -117,29 +117,38 @@ training_data['clean_drug'] = training_data['drug'].apply(correct_drug_col)
 test_data['clean_drug'] = test_data['drug'].apply(correct_drug_col)
 
 
-# In[18]:
+# In[9]:
 
 
 training_data["cleaned_text"] = training_data["cleaned_text"].apply(correct_drugs)
 test_data["cleaned_text"] = test_data["cleaned_text"].apply(correct_drugs)
 
 
-# In[21]:
+# In[10]:
 
 
 training_data.text[0], training_data.cleaned_text[0]
 
 
-# In[22]:
+# In[15]:
 
 
-training_data[training_data["drug"] == 'almita']['text']
+training_data[training_data["drug"] == 'ketruda']['text']
 
 
-# In[26]:
+# In[16]:
 
 
-training_data[training_data["clean_drug"] == 'almita']['text']
+training_data[training_data["clean_drug"] == 'ketruda']['text']
+
+
+# In[17]:
+
+
+#save the preprocessed datasets
+training_data.to_csv(r'C:\Users\GIGABYTE\Desktop\drug-sentiment-analysis\data\processed\training_data.csv', index=False)
+
+test_data.to_csv(r'C:\Users\GIGABYTE\Desktop\drug-sentiment-analysis\data\processed\test_data.csv', index=False)
 
 
 # In[ ]:

@@ -23,16 +23,15 @@ from sklearn.metrics import classification_report, confusion_matrix, accuracy_sc
 X_train = joblib.load(r'C:\Users\GIGABYTE\Desktop\drug-sentiment-analysis\data\processed\X_train.pkl')
 y_train = joblib.load(r'C:\Users\GIGABYTE\Desktop\drug-sentiment-analysis\data\processed\y_train.pkl')
 
-X_test = joblib.load(r'C:\Users\GIGABYTE\Desktop\drug-sentiment-analysis\data\processed\X_val.pkl')
-y_test = joblib.load(r'C:\Users\GIGABYTE\Desktop\drug-sentiment-analysis\data\processed\y_val.pkl')
+X_val = joblib.load(r'C:\Users\GIGABYTE\Desktop\drug-sentiment-analysis\data\processed\X_val.pkl')
+y_val = joblib.load(r'C:\Users\GIGABYTE\Desktop\drug-sentiment-analysis\data\processed\y_val.pkl')
 
 
 # In[3]:
 
 
 # train and evaluate logistic regression model as baseline
-lr = LogisticRegression(max_iter=100)
-
+lr = LogisticRegression(max_iter=1000, class_weight='balanced')
 lr.fit(X_train, y_train)
 
 
@@ -40,416 +39,252 @@ lr.fit(X_train, y_train)
 
 
 #make predictiona on test set
-predictions = lr.predict(X_test)
+predictions = lr.predict(X_val)
 
 #print f1 score on test set
-print(f"the f1 score for logistic regression on the test set is: {f1_score(y_test, predictions, average='macro')}")
+print(f"the f1 score for logistic regression on the test set is: {f1_score(y_val, predictions, average='macro')}")
+print(f"The f1 score for logistic regression on the training set is: {f1_score(y_train, lr.predict(X_train), average='macro')}")
 
 
 # In[5]:
 
 
-#f1 score on training set
-print(f"The f1 score for logistic regression on the training set is: {f1_score(y_train, lr.predict(X_train), average='macro')}")
+print(classification_report(y_val, predictions))
 
 
 # In[6]:
 
 
-print(classification_report(y_test, predictions))
+dt_model = DecisionTreeClassifier(
+    class_weight='balanced',
+    max_depth=2,          
+    min_samples_leaf=5     
+)
+
+dt_model.fit(X_train, y_train)
 
 
 # In[7]:
 
 
-# train and evaluate decision tree model
-dt = DecisionTreeClassifier(
-    max_depth=20,
-    random_state=42
-)
+#make prediction on test set with decision tree
+predictions_dt = dt_model.predict(X_val)
 
-dt.fit(X_train, y_train)
+#print f1 score on test set
+print(f"the f1 score for decision tree on the test set is: {f1_score(y_val, predictions_dt, average='macro')}")
+print(f"The f1 score for decision tree on the training set is: {f1_score(y_train, dt_model.predict(X_train), average='macro')}")
 
 
 # In[8]:
 
 
-#make prediction on test set with decision tree
-predictions_dt = dt.predict(X_test)
-
-#print f1 score on test set
-print(f"the f1 score for decision tree on the test set is: {f1_score(y_test, predictions_dt, average='macro')}")
-print(f"The f1 score for decision tree on the training set is: {f1_score(y_train, dt.predict(X_train), average='macro')}")
+print(classification_report(y_val, predictions_dt))
 
 
 # In[9]:
 
 
-print(classification_report(y_test, predictions_dt))
-
-
-# In[ ]:
-
-
-# train random forest model
-rf = RandomForestClassifier(
-    n_estimators=200,
-    max_depth=25,
-    random_state=42,
-    n_jobs=-1
+rf_model = RandomForestClassifier(
+    n_estimators=5,
+    class_weight='balanced',
+    max_depth=3,
+    random_state=42
 )
 
-rf.fit(X_train, y_train)
+rf_model.fit(X_train, y_train)
+
+
+# In[10]:
+
+
+#make prediction on test set with random forest
+predictions_rf = rf_model.predict(X_val)
+
+#print f1 score on test set
+print(f"the f1 score for random forest on the test set is: {f1_score(y_val, predictions_rf, average='macro')}")
+print(f"The f1 score for random forest on the training set is: {f1_score(y_train, rf_model.predict(X_train), average='macro')}")
 
 
 # In[11]:
 
 
-#make prediction on test set with random forest
-predictions_rf = rf.predict(X_test)
-
-#print f1 score on test set
-print(f"the f1 score for random forest on the test set is: {f1_score(y_test, predictions_rf, average='macro')}")
-print(f"The f1 score for random forest on the training set is: {f1_score(y_train, rf.predict(X_train), average='macro')}")
+print(classification_report(y_val, predictions_rf))
 
 
 # In[12]:
 
 
-print(classification_report(y_test, predictions_dt))
+xgb_model = XGBClassifier(
+    objective='multi:softprob',   
+    num_class=3,                  
+    eval_metric='mlogloss',
+    n_estimators=50,
+    learning_rate=0.1,
+    max_depth=2,
+    subsample=0.8,
+    colsample_bytree=0.8,
+    random_state=42
+)
+
+xgb_model.fit(X_train, y_train)
 
 
 # In[13]:
 
 
-# train and evaluate support vector machine model
-svm = SVC()
+#make prediction on test set with random forest
+predictions_xgb = xgb_model.predict(X_val)
 
-svm.fit(X_train, y_train)
+#print f1 score on test set
+print(f"the f1 score for xgb on the test set is: {f1_score(y_val, predictions_xgb, average='macro')}")
+print(f"The f1 score for xgb on the training set is: {f1_score(y_train, xgb_model.predict(X_train), average='macro')}")
 
 
 # In[14]:
 
 
-#make prediction on test set with support vector machine
-predictions_svm = svm.predict(X_test)
-
-#print f1 score on test set
-print(f"the f1 score for support vector machine on the test set is: {f1_score(y_test, predictions_svm, average='macro')}")
-print(f"The f1 score for support vector machine on the training set is: {f1_score(y_train, svm.predict(X_train), average='macro')}")
+print(classification_report(y_val, predictions_xgb))
 
 
 # In[15]:
 
 
-# train and evaluate Xgboost model
-xgb = XGBClassifier(
-    n_estimators=300,
-    max_depth=6,
-    learning_rate=0.3,
-    subsample=0.8,
-    colsample_bytree=0.8,
-    random_state=42,
-    n_jobs=-1
-)
+from sklearn.neighbors import KNeighborsClassifier
 
-xgb.fit(X_train, y_train)
+knn_model = KNeighborsClassifier(n_neighbors=1)
+knn_model.fit(X_train, y_train)
 
 
 # In[16]:
 
 
-#make prediction on test set with Xgboost
-predictions_xgb = xgb.predict(X_test)
+#make prediction on test set with random forest
+predictions_knn = knn_model.predict(X_val)
 
 #print f1 score on test set
-print(f"the f1 score for Xgboost on the test set is: {f1_score(y_test, predictions_xgb, average='macro')}")
-print(f"The f1 score for Xgboost on the training set is: {f1_score(y_train, xgb.predict(X_train), average='macro')}")
+print(f"the f1 score for knn on the test set is: {f1_score(y_val, predictions_knn, average='macro')}")
+print(f"The f1 score for knn on the training set is: {f1_score(y_train, knn_model.predict(X_train), average='macro')}")
 
 
-# In[ ]:
+# In[17]:
 
 
-# train and evaluate logistic regression with cross validation
-log_reg_cv = LogisticRegressionCV(
-    cv=5,
-    max_iter=1000,
-    n_jobs=-1
-)
+print(classification_report(y_val, predictions_knn))
 
-log_reg_cv.fit(X_train, y_train)
 
+# In[3]:
 
-# In[18]:
 
-
-#make prediction on test set with Logistic Regression CV
-predictions_lr_cv = log_reg_cv.predict(X_test)
-
-#print f1 score on test set
-print(f"the f1 score for Logistic Regression CV on the test set is: {f1_score(y_test, predictions_lr_cv, average='macro')}")
-print(f"The f1 score for Logistic Regression CV on the training set is: {f1_score(y_train, log_reg_cv.predict(X_train), average='macro')}")
-
-
-# In[19]:
-
-
-# train and evaluate logistic regression model as baseline
-lr2 = LogisticRegression(max_iter=100,
-                         class_weight='balanced',
-    C=2)
-
-lr2.fit(X_train, y_train)
-
-
-# In[20]:
-
-
-#make prediction on test set with Logistic Regression CV 2
-predictions_lr2 = lr2.predict(X_test)
-
-#print f1 score on test set
-print(f"the f1 score for Logistic Regression CV 2 on the test set is: {f1_score(y_test, predictions_lr2, average='macro')}")
-print(f"The f1 score for Logistic Regression CV 2 on the training set is: {f1_score(y_train, lr2.predict(X_train), average='macro')}")
-
-
-# In[21]:
-
-
-#tuning decision tree with random ssearch cv
-dt_rs = DecisionTreeClassifier(random_state=42)
-
-dt_params = {
-    'max_depth': [10, 20, 30, 40, None],
-    'min_samples_split': [2, 5, 10, 20],
-    'min_samples_leaf': [1, 2, 4, 8],
-    'criterion': ['gini', 'entropy']
-}
-
-dt_search = RandomizedSearchCV(
-    dt_rs,
-    dt_params,
-    n_iter=20,
-    scoring='f1_weighted',
-    cv=5,
-    n_jobs=-1,
-    verbose=1
-)
-
-dt_search.fit(X_train, y_train)
-
-best_dt = dt_search.best_estimator_
-
-
-# In[ ]:
-
-
-# prediction an evaluation of the tuned decision tree model
-from sklearn.metrics import f1_score
-
-y_pred_dt_rs = best_dt.predict(X_test)
-
-print("Tuned Decision Tree F1 on test:",
-      f1_score(y_test, y_pred_dt_rs, average='macro'))
-
-print("Tuned Decision Tree F1 on train:",
-      f1_score(y_train, best_dt.predict(X_train), average='macro'))
-
-
-# In[23]:
-
-
-# tuning random forest with random search cv
-
-
-rf_rs = RandomForestClassifier(random_state=42)
-
-rf_params = {
-    'n_estimators': [200, 300, 400],
-    'max_depth': [10, 20, 30, None],
-    'min_samples_split': [2, 5, 10],
-    'min_samples_leaf': [1, 2, 4],
-    'max_features': ['sqrt', 'log2']
-}
-
-rf_search = RandomizedSearchCV(
-    rf_rs,
-    rf_params,
-    n_iter=20,
-    scoring='f1_weighted',
-    cv=5,
-    n_jobs=-1,
-    verbose=1
-)
-
-rf_search.fit(X_train, y_train)
-
-best_rf = rf_search.best_estimator_
-
-
-# In[24]:
-
-
-#make prediction on test set with Random Forest Random Search
-y_pred_rf_rs = best_rf.predict(X_test)
-
-#print f1 score on test set
-print(f"the f1 score for Random Forest Random Search on the test set is: {f1_score(y_test, y_pred_rf_rs, average='macro')}")
-print(f"The f1 score for Random Forest Random Search on the training set is: {f1_score(y_train, best_rf.predict(X_train), average='macro')}")
-
-
-# In[25]:
-
-
-# tuning support vector machine with random search cv
-svm_rs = LinearSVC()
-
-svm_params = {
-    'C': [0.01, 0.1, 1, 5, 10, 20]
-}
-
-svm_search = RandomizedSearchCV(
-    svm_rs,
-    svm_params,
-    n_iter=10,
-    scoring='f1_weighted',
-    cv=5,
-    n_jobs=-1
-)
-
-svm_search.fit(X_train, y_train)
-
-best_svm = svm_search.best_estimator_
-
-
-# In[26]:
-
-
-#make prediction on test set with Support Vector Machine Random Search
-y_pred_svc_rs = best_svm.predict(X_test)
-
-#print f1 score on test set
-print(f"the f1 score for Support Vector Machine Random Search on the test set is: {f1_score(y_test, y_pred_svc_rs, average='macro')}")
-print(f"The f1 score for Support Vector Machine Random Search on the training set is: {f1_score(y_train, best_svm.predict(X_train), average='macro')}")
-
-
-# In[27]:
-
-
-# tuning xgboost with random search cv
-xgb_rs = XGBClassifier(random_state=42)
-
-xgb_params = {
-    'n_estimators': [200, 300, 400],
-    'max_depth': [4, 6, 8],
-    'learning_rate': [0.01, 0.05, 0.1],
-    'subsample': [0.7, 0.8, 1],
-    'colsample_bytree': [0.7, 0.8, 1]
-}
-
-xgb_search = RandomizedSearchCV(
-    xgb_rs,
-    xgb_params,
-    n_iter=20,
-    scoring='f1_weighted',
-    cv=5,
-    n_jobs=-1,
-    verbose=1
-)
-
-xgb_search.fit(X_train, y_train)
-
-best_xgb = xgb_search.best_estimator_
-
-
-# In[28]:
-
-
-#make prediction on test set with XGBoost Random Search
-y_pred_xgb_rs = best_xgb.predict(X_test)
-
-#print f1 score on test set
-print(f"the f1 score for XGBoost Random Search on the test set is: {f1_score(y_test, y_pred_xgb_rs, average='macro')}")
-print(f"The f1 score for XGBoost Random Search on the training set is: {f1_score(y_train, best_xgb.predict(X_train), average='macro')}")
-
-
-# # model evalution
-# 
-# the f1 score for logistic regression on the test set is: 0.5930483635966732
-# The f1 score for logistic regression on the training set is: 0.7116027125443153
-# 
-# the f1 score for decision tree on the test set is: 0.6338391290263241
-# The f1 score for decision tree on the training set is: 0.8471768635624207
-# 
-# the f1 score for random forest on the test set is: 0.7322322451484325
-# The f1 score for random forest on the training set is: 0.9229690559212544
-# 
-# the f1 score for support vector machine on the test set is: 0.41740576498485193
-# The f1 score for support vector machine on the training set is: 0.4248719509003645
-# 
-# the f1 score for Xgboost on the test set is: 0.7497920595213582
-# The f1 score for Xgboost on the training set is: 1.0
-# 
-# the f1 score for Logistic Regression CV on the test set is: 0.7376109072219701
-# The f1 score for Logistic Regression CV on the training set is: 0.998611254811264
-# 
-# the f1 score for Logistic Regression CV 2 on the test set is: 0.6134098179211165
-# The f1 score for Logistic Regression CV 2 on the training set is: 0.729689270487634
-# 
-# Tuned Decision Tree F1 on test: 0.709298489192205
-# Tuned Decision Tree F1 on train: 1.0
-# 
-# the f1 score for Random Forest Random Search on the test set is: 0.7717761454325182
-# The f1 score for Random Forest Random Search on the training set is: 0.9991661442853766
-# 
-# the f1 score for Support Vector Machine Random Search on the test set is: 0.7230218683362825
-# The f1 score for Support Vector Machine Random Search on the training set is: 0.9745916304793285
-# 
-# the f1 score for XGBoost Random Search on the test set is: 0.7534195090813144
-# The f1 score for XGBoost Random Search on the training set is: 0.9961078431450252
-# 
-
-# In[ ]:
-
-
-# load the test set for final prediction
-tt = joblib.load(r"C:\Users\GIGABYTE\Desktop\drug-sentiment-analysis\data\processed/X_test.pkl")
-
-
-# In[ ]:
-
-
-# make final prediction with the best random forst model
+from sklearn.utils.class_weight import compute_class_weight
+import torch
 import numpy as np
-np.unique(best_rf.predict(tt), return_counts=True)
+device = torch.device("cuda")
+
+classes = np.array([0, 1, 2]) 
+class_weights = compute_class_weight(class_weight='balanced', classes=classes, y=y_train)
+class_weights = torch.tensor(class_weights, dtype=torch.float).to(device)
+
+print("Class weights:", class_weights)
 
 
-# In[ ]:
+# In[4]:
 
 
-# make final prediction with the best xgboost model
-np.unique(best_xgb.predict(tt), return_counts=True)
+import torch.nn as nn
+import torch.nn.functional as F
+
+class BERTClassifier(nn.Module):
+    def __init__(self, input_dim, hidden_dim=128, output_dim=3, dropout=0.5):
+        super(BERTClassifier, self).__init__()
+        self.fc1 = nn.Linear(input_dim, hidden_dim)
+        self.dropout = nn.Dropout(dropout)
+        self.fc2 = nn.Linear(hidden_dim, output_dim)
+
+    def forward(self, x):
+        x = F.relu(self.fc1(x))
+        x = self.dropout(x)
+        x = self.fc2(x)
+        return x
 
 
-# In[44]:
+# In[5]:
 
 
-print(classification_report(y_test, y_pred_rf_rs))
+X_train_tensor = torch.tensor(X_train, dtype=torch.float).to(device)
+X_test_tensor = torch.tensor(X_val, dtype=torch.float).to(device)
+y_train_tensor = torch.tensor(y_train.values, dtype=torch.long).to(device)
+y_test_tensor = torch.tensor(y_val.values, dtype=torch.long).to(device)
 
 
-# In[45]:
+# In[6]:
 
 
-print(classification_report(y_test, y_pred_xgb_rs))
+model = BERTClassifier(input_dim=X_train.shape[1]).to(device)
+criterion = nn.CrossEntropyLoss(weight=class_weights)
+optimizer = torch.optim.Adam(model.parameters(), lr=3e-5, weight_decay=1e-4)
 
 
-# # Best classical classifcation 
-# the best model so far  is the *best_rf*
-
-# In[47]:
+# In[7]:
 
 
-joblib.dump(best_rf, r"C:\Users\GIGABYTE\Desktop\drug-sentiment-analysis\model\best_rf.joblib")
+from torch.utils.data import TensorDataset, DataLoader
+
+# Create dataloaders
+train_dataset = TensorDataset(X_train_tensor, y_train_tensor)
+train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
+
+num_epochs = 20
+
+for epoch in range(num_epochs):
+    model.train()
+    total_loss = 0
+    for batch_X, batch_y in train_loader:
+        optimizer.zero_grad()
+        outputs = model(batch_X)
+        loss = criterion(outputs, batch_y)
+        loss.backward()
+        optimizer.step()
+        total_loss += loss.item()
+
+    print(f"Epoch {epoch+1}/{num_epochs}, Loss: {total_loss/len(train_loader):.4f}")
+
+
+# In[8]:
+
+
+model.eval()
+with torch.no_grad():
+    outputs = model(X_test_tensor)
+    preds = torch.argmax(outputs, dim=1)
+
+from sklearn.metrics import f1_score, classification_report
+print("F1 Score (Macro):", f1_score(y_test_tensor.cpu(), preds.cpu(), average='macro'))
+print(classification_report(y_test_tensor.cpu(), preds.cpu()))
+
+
+# In[9]:
+
+
+with torch.no_grad():
+    outputs_train = model(X_train_tensor)
+    train_preds = torch.argmax(outputs_train, dim=1)
+
+from sklearn.metrics import f1_score, classification_report
+print("F1 Score (Macro):", f1_score(y_train_tensor.cpu(), train_preds.cpu(), average='macro'))
+
+
+# In[10]:
+
+
+import torch
+import os
+
+save_path = r"C:\Users\GIGABYTE\Desktop\drug-sentiment-analysis\model\nn_model.pt"
+
+# Ensure directory exists
+os.makedirs(os.path.dirname(save_path), exist_ok=True)
+
+torch.save(model.state_dict(), save_path)
 
 
 # In[ ]:

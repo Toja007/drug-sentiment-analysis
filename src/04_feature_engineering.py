@@ -1,18 +1,18 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[1]:
+# In[23]:
 
 
 #import neessary libraries for feature engineering
 import pandas as pd
 import numpy as np
-from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.model_selection import train_test_split
 from scipy.sparse import csr_matrix,hstack
 from imblearn.over_sampling import RandomOverSampler
-from imblearn.under_sampling import RandomUnderSampler
-from sklearn.preprocessing import OneHotEncoder
+from transformers import BertTokenizer, BertModel
+import torch
+import joblib
 
 
 # In[2]:
@@ -60,355 +60,135 @@ print("Rare words:", len(rare_words))
 # 
 # Some drugs appeared very infrequently in the dataset, with certain drugs occurring only once. Such rare categories can introduce noise when using one-hot encoding because the model cannot learn reliable patterns from a single observation. To mitigate this, drugs appearing fewer than a specified threshold were grouped into an other_drug category before encoding.
 
-# In[6]:
-
-
-# vectorizer
-tfidf = TfidfVectorizer(
-    max_features=6000,
-    ngram_range=(1,2),
-    min_df=5,
-    max_df=0.9
-)
-
-
 # In[7]:
 
 
-# checking rare drugs 
-drug_counts = training['clean_drug'].value_counts()
+# initialize the Bert tokenizer and model
+tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
+model = BertModel.from_pretrained("bert-base-uncased")
 
-rare_drugs = drug_counts[drug_counts < 5].index
+device = torch.device("cuda")
+model.to(device)
+model.eval()
 
 
 # In[8]:
 
 
-rare_drugs
+def mean_pooling(last_hidden_state, attention_mask):
+    mask = attention_mask.unsqueeze(-1).expand(last_hidden_state.size()).float()
+    return (last_hidden_state * mask).sum(dim=1) / mask.sum(dim=1)
 
 
 # In[9]:
 
 
-# repalcing rare drugs with "other drugs"
-training['clean_drug'] = training['clean_drug'].replace(rare_drugs, 'other_drug')
-test['clean_drug'] = test['clean_drug'].replace(rare_drugs, 'other_drug')
+def get_bert_embeddings(texts, batch_size=32):
+    all_embeddings = []
+
+    for i in range(0, len(texts), batch_size):
+        batch_texts = texts[i:i + batch_size]
+
+        encoded_inputs = tokenizer(
+            batch_texts,
+            padding=True,
+            truncation=True,
+            max_length=256,
+            return_tensors="pt"
+        )
+
+
+        encoded_inputs = {k: v.to(device) for k, v in encoded_inputs.items()}
+
+        with torch.no_grad():
+            outputs = model(**encoded_inputs)
+
+
+        batch_embeddings = mean_pooling(
+            outputs.last_hidden_state,
+            encoded_inputs['attention_mask']
+        )
+
+        all_embeddings.append(batch_embeddings.cpu())
+
+    return torch.cat(all_embeddings, dim=0)
 
 
 # In[10]:
 
 
-#get only the needed columns for feature engineering
-train = training[["cleaned_text", "clean_drug", "sentiment"]]
-testing = test[["cleaned_text", "clean_drug"]]
+training['final_text'] = training["cleaned_text"] + " " + training["clean_drug"]
+test["final_text"] = test["cleaned_text"] + " " + test["clean_drug"]
 
 
 # In[11]:
 
 
-# Drug mention feature
-train['drug_in_text'] = train.apply(
-    lambda x: 1 if x['clean_drug'] in x['cleaned_text'] else 0,
-    axis=1
+X_train_bert = get_bert_embeddings(training["final_text"].tolist())
+X_test_bert = get_bert_embeddings(test["final_text"].tolist())
 
+
+# In[12]:
+
+
+y = training["sentiment"]
+
+
+# In[17]:
+
+
+from sklearn.preprocessing import StandardScaler
+
+scaler = StandardScaler()
+X_train_bert = scaler.fit_transform(X_train_bert)
+X_test_bert = scaler.transform(X_test_bert)
+
+
+# In[29]:
+
+
+ros = RandomOverSampler()
+X_train_bert, y = ros.fit_resample(X_train_bert, y)
+
+
+
+# In[30]:
+
+
+X_train, X_val, y_train, y_val = train_test_split(
+    X_train_bert,
+    y,
+    test_size=0.2,
+    random_state=42,
+    stratify=y
 )
 
-testing['drug_in_text'] = testing.apply(
-    lambda x: 1 if x['clean_drug'] in x['cleaned_text'] else 0,
-    axis=1
-)
 
+# In[32]:
 
-# In[ ]:
 
-
-# defining list of positive and negative words for feature enginnering
-positive_words = [
-    "worked","effective","great","excellent","relief",
-    "helped","improved","better","amazing","perfect", "improvement"
-    "recommended","success","good","love","progress","breakthrough",
-    "promising", "best", "hope", "positive", "fantastic", "benefit"
-]
-
-negative_words = [
-    "pain","nausea","vomit","vomiting","dizziness",
-    "fatigue","rash","headache","diarrhea","cramps",
-    "terrible","awful","worse","bad","horrible", "failure",
-    "miserable", "fail", "horrifying", "infection", "terrified" 'terrible',
-    "coughing", "insane"
-]
-
-
-# In[13]:
-
-
-train[train['sentiment'] == 1]['cleaned_text'].iloc[10]
-
-
-# In[ ]:
-
-
-# function to count positive words
-def positive_score(text):
-    words = text.split()
-    return sum(word in positive_words for word in words)
-
-train['positive_score'] = train['cleaned_text'].apply(positive_score)
-testing['positive_score'] = testing['cleaned_text'].apply(positive_score)
-
-
-# In[ ]:
-
-
-#function to count negative words
-def negative_score(text):
-    words = text.split()
-    return sum(word in negative_words for word in words)
-
-train['negative_score'] = train['cleaned_text'].apply(negative_score)
-testing['negative_score'] = testing['cleaned_text'].apply(negative_score)
-
-
-# In[ ]:
-
-
-# create sentiment strength features
-train['sentiment_strength'] = train['positive_score'] - train['negative_score']
-testing['sentiment_strength'] = testing['positive_score'] - testing['negative_score']
-
-
-# In[ ]:
-
-
-#list of side effects
-side_effect_words = [
-    "side effect","caused","reaction","bleeding",
-    "nausea","dizziness","headache", "fatigue", "diarrhea", "abdominal pain", "vomiting", "constipation", "dry mouth", "insomnia", 
-    "rash", "itching", "swelling", "difficulty breathing", "chest pain", "irregular heartbeat", "seizures", 
-    "muscle pain", "joint pain", "blurred vision", "hearing loss", "anxiety", "depression"
-]
-
-
-# In[ ]:
-
-
-# function to check for side effects
-def side_effect_flag(text):
-    return int(any(word in text for word in side_effect_words))
-
-train['side_effect_flag'] = train['cleaned_text'].apply(side_effect_flag)
-testing['side_effect_flag'] = testing['cleaned_text'].apply(side_effect_flag)
-
-
-# In[ ]:
-
-
-#list of words indicating drug effectiveness
-effect_words = [
-    "worked","relief","effective","improved","helped"
-]
-
-
-# In[ ]:
-
-
-# fuc t0 check for drug effectiveness
-def effectiveness_flag(text):
-    return int(any(word in text for word in effect_words))
-
-train['effect_flag'] = train['cleaned_text'].apply(effectiveness_flag)
-testing['effect_flag'] = testing['cleaned_text'].apply(effectiveness_flag)
-
-
-# In[ ]:
-
-
-#list of neutral words
-neutral_words = [
-    "started","taking","prescribed","week","month","day"
-]
-
-def neutral_score(text):
-    words = text.split()
-    return sum(word in neutral_words for word in words)
-
-train['neutral_score'] = train['cleaned_text'].apply(neutral_score)
-testing['neutral_score'] = testing['cleaned_text'].apply(neutral_score)
-
-
-# In[ ]:
-
-
-#create pos to neg ratio feature
-train['pos_neg_ratio'] = train['positive_score'] / (train['negative_score'] + 1)
-testing['pos_neg_ratio'] = testing['positive_score'] / (testing['negative_score'] + 1)
-
-
-# In[ ]:
-
-
-#checking the engineered features
-train.head()
-
-
-# In[24]:
-
-
-train.columns
-
-
-# In[ ]:
-
-
-#one hot encoding foor drugs
-one_hot_encoder = OneHotEncoder(handle_unknown="ignore", sparse_output=True)
-
-
-# define feature and target variables
-X_text = train['cleaned_text']
-X_drug = one_hot_encoder.fit_transform(train[["clean_drug"]])
-y = train['sentiment']
+X_train.shape, X_val.shape
 
 
 # In[33]:
 
 
-#vectorize the text data
-X_tfidf = tfidf.fit_transform(X_text)
+y_train.shape,y_val.shape
 
 
-# In[36]:
+# In[34]:
 
 
-# convert one-hot encoding to sparese marix
+joblib.dump(X_train, r"C:\Users\GIGABYTE\Desktop\drug-sentiment-analysis\data\processed\X_train.pkl")
+joblib.dump(X_val, r"C:\Users\GIGABYTE\Desktop\drug-sentiment-analysis\data\processed\X_val.pkl")
+joblib.dump(y_train, r"C:\Users\GIGABYTE\Desktop\drug-sentiment-analysis\data\processed\y_train.pkl")
+joblib.dump(y_val, r"C:\Users\GIGABYTE\Desktop\drug-sentiment-analysis\data\processed\y_val.pkl")
 
-X_drug_sparse = csr_matrix(X_drug)
-
-
-# In[ ]:
-
-
-# combine the text and drug features
-
-X = hstack([
-    X_tfidf,
-    X_drug_sparse,
-    csr_matrix(train[['drug_in_text',
-                      'positive_score',
-                      'negative_score',
-                      'sentiment_strength',
-                      'side_effect_flag',
-                      'effect_flag',
-                      'neutral_score',
-                      'pos_neg_ratio']].values)
-])
-
-
-# In[38]:
-
-
-X.shape
-
-
-# In[39]:
-
-
-y.shape
+joblib.dump(X_test_bert, r"C:\Users\GIGABYTE\Desktop\drug-sentiment-analysis\data\processed\X_test.pkl")
 
 
 # In[ ]:
 
 
-# over sampling the minority class
-ros = RandomOverSampler(
-    sampling_strategy={0:1200, 1:1200}
-)
 
-X_over, y_over = ros.fit_resample(X, y)
-
-
-# In[ ]:
-
-
-# undersampling the majority class
-rus = RandomUnderSampler(
-    sampling_strategy={2:2000}
-)
-
-X_resampled, y_resampled = rus.fit_resample(X_over, y_over)
-
-
-# In[42]:
-
-
-X_resampled.shape
-
-
-# In[43]:
-
-
-X.shape
-
-
-# In[44]:
-
-
-#spliting the data into training and validation sets
-X_train, X_val, y_train, y_val = train_test_split(
-    X_resampled,
-    y_resampled,
-    test_size=0.2,
-    random_state=42,
-    stratify=y_resampled
-)
-
-
-# In[45]:
-
-
-#feature engineering for the test dataset
-testing_text = testing['cleaned_text']
-testing_drug = one_hot_encoder.transform(testing[["clean_drug"]])
-
-
-testing_tfidf = tfidf.transform(testing_text)
-#testing_drug_encoded = one_hot_encoder.transform(testing_drug)
-testing_drug_sparse = csr_matrix(testing_drug)
-final_testing = hstack([testing_tfidf, testing_drug_sparse,csr_matrix(testing[['drug_in_text',
-                      'positive_score',
-                      'negative_score',
-                      'sentiment_strength',
-                      'side_effect_flag',
-                      'effect_flag',
-                      'neutral_score',
-                      'pos_neg_ratio']].values)])
-
-
-# In[46]:
-
-
-final_testing.shape
-
-
-# In[47]:
-
-
-X.shape
-
-
-# In[49]:
-
-
-import joblib
-
-# Save training features and target
-joblib.dump(X_train, r"C:\Users\GIGABYTE\Desktop\drug-sentiment-analysis\data\processed/X_train.pkl")
-joblib.dump(X_val, r"C:\Users\GIGABYTE\Desktop\drug-sentiment-analysis\data\processed/X_val.pkl")
-joblib.dump(y_train, r"C:\Users\GIGABYTE\Desktop\drug-sentiment-analysis\data\processed/y_train.pkl")
-joblib.dump(y_val, r"C:\Users\GIGABYTE\Desktop\drug-sentiment-analysis\data\processed/y_val.pkl")
-
-# Save test features
-joblib.dump(final_testing, r"C:\Users\GIGABYTE\Desktop\drug-sentiment-analysis\data\processed/X_test.pkl")
-joblib.dump(tfidf, r"C:\Users\GIGABYTE\Desktop\drug-sentiment-analysis\data\processed/tfidf_vectorizer.pkl")
-#joblib.dump(X_drug_encoded.columns, r"C:\Users\GIGABYTE\Desktop\drug-sentiment-analysis\data\processed/drug_columns.pkl")
 
